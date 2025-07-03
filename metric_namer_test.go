@@ -20,17 +20,17 @@
 package otlptranslator
 
 import (
+	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestMetricNamer_Build(t *testing.T) {
 	tests := []struct {
-		name     string
-		namer    MetricNamer
-		metric   Metric
-		expected string
+		name           string
+		namer          MetricNamer
+		metric         Metric
+		wantMetricName string
+		wantUnitName   string
 	}{
 		// UTF8Allowed = false, WithMetricSuffixes = false tests
 		{
@@ -44,7 +44,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeGauge,
 			},
-			expected: "simple_metric",
+			wantMetricName: "simple_metric",
 		},
 		{
 			name: "metric with special characters replaced",
@@ -57,7 +57,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeGauge,
 			},
-			expected: "metric_with_special_chars",
+			wantMetricName: "metric_with_special_chars",
 		},
 		{
 			name: "metric starting with digit gets underscore prefix",
@@ -70,7 +70,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeGauge,
 			},
-			expected: "_123metric",
+			wantMetricName: "_123metric",
 		},
 		{
 			name: "metric with namespace without suffixes",
@@ -84,7 +84,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeGauge,
 			},
-			expected: "test_namespace_simple_metric",
+			wantMetricName: "test_namespace_simple_metric",
 		},
 		{
 			name: "empty metric name without suffixes",
@@ -97,7 +97,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeGauge,
 			},
-			expected: "",
+			wantMetricName: "",
 		},
 		{
 			name: "metric with multiple consecutive special chars",
@@ -110,7 +110,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeGauge,
 			},
-			expected: "metric_name",
+			wantMetricName: "metric_name",
 		},
 		{
 			name: "metric name with only special characters",
@@ -123,9 +123,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeGauge,
 			},
-			expected: "",
+			wantMetricName: "",
 		},
-
 		{
 			name: "namespace with special characters",
 			namer: MetricNamer{
@@ -138,7 +137,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeGauge,
 			},
-			expected: "test@namespace_metric", // TODO: should be "test_namespace_metric"
+			wantMetricName: "test@namespace_metric", // TODO: should be "test_namespace_metric"
+
 		},
 
 		// UTF8Allowed = false, WithMetricSuffixes = true tests
@@ -153,7 +153,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeMonotonicCounter,
 			},
-			expected: "requests_total",
+			wantMetricName: "requests_total",
 		},
 		{
 			name: "gauge with unit 1 gets ratio suffix",
@@ -166,7 +166,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "1",
 				Type: MetricTypeGauge,
 			},
-			expected: "cpu_usage_ratio",
+			wantMetricName: "cpu_usage_ratio",
 		},
 		{
 			name: "counter with unit 1 does not get ratio suffix",
@@ -179,7 +179,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "1",
 				Type: MetricTypeMonotonicCounter,
 			},
-			expected: "items_total",
+			wantMetricName: "items_total",
 		},
 		{
 			name: "metric with time unit",
@@ -192,7 +192,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "ms",
 				Type: MetricTypeGauge,
 			},
-			expected: "response_time_milliseconds",
+			wantMetricName: "response_time_milliseconds",
+			wantUnitName:   "milliseconds",
 		},
 		{
 			name: "metric with bytes unit",
@@ -205,7 +206,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "By",
 				Type: MetricTypeGauge,
 			},
-			expected: "memory_usage_bytes",
+			wantMetricName: "memory_usage_bytes",
+			wantUnitName:   "bytes",
 		},
 		{
 			name: "metric with per unit",
@@ -218,7 +220,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "1/s",
 				Type: MetricTypeGauge,
 			},
-			expected: "requests_per_second",
+			wantMetricName: "requests_per_second",
+			wantUnitName:   "per_second",
 		},
 		{
 			name: "metric with complex per unit",
@@ -231,7 +234,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "By/s",
 				Type: MetricTypeGauge,
 			},
-			expected: "throughput_bytes_per_second",
+			wantMetricName: "throughput_bytes_per_second",
+			wantUnitName:   "bytes_per_second",
 		},
 		{
 			name: "metric with unknown unit",
@@ -244,7 +248,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "custom_unit",
 				Type: MetricTypeGauge,
 			},
-			expected: "custom_metric_custom_unit",
+			wantMetricName: "custom_metric_custom_unit",
+			wantUnitName:   "custom_unit",
 		},
 		{
 			name: "metric with unit containing braces is ignored",
@@ -257,7 +262,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "{custom}",
 				Type: MetricTypeGauge,
 			},
-			expected: "custom_metric",
+			wantMetricName: "custom_metric",
 		},
 		{
 			name: "metric with per unit containing braces is ignored",
@@ -270,7 +275,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "By/{custom}",
 				Type: MetricTypeGauge,
 			},
-			expected: "custom_metric_bytes",
+			wantMetricName: "custom_metric_bytes",
+			wantUnitName:   "bytes",
 		},
 		{
 			name: "metric name already contains total suffix",
@@ -283,7 +289,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeMonotonicCounter,
 			},
-			expected: "requests_total",
+			wantMetricName: "requests_total",
 		},
 		{
 			name: "metric name already contains ratio suffix",
@@ -296,7 +302,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "1",
 				Type: MetricTypeGauge,
 			},
-			expected: "cpu_usage_ratio",
+			wantMetricName: "cpu_usage_ratio",
 		},
 		{
 			name: "metric name already contains unit suffix",
@@ -309,7 +315,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "s",
 				Type: MetricTypeGauge,
 			},
-			expected: "response_time_seconds",
+			wantMetricName: "response_time_seconds",
+			wantUnitName:   "seconds",
 		},
 		{
 			name: "metric with namespace and suffixes",
@@ -323,7 +330,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "1/s",
 				Type: MetricTypeMonotonicCounter,
 			},
-			expected: "app_requests_per_second_total",
+			wantMetricName: "app_requests_per_second_total",
+			wantUnitName:   "per_second",
 		},
 		{
 			name: "metric starting with digit with namespace and suffixes",
@@ -337,7 +345,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeMonotonicCounter,
 			},
-			expected: "app_123_requests_total",
+			wantMetricName: "app_123_requests_total",
 		},
 		{
 			name: "metric with multiple underscores normalized",
@@ -347,10 +355,11 @@ func TestMetricNamer_Build(t *testing.T) {
 			},
 			metric: Metric{
 				Name: "metric__with__multiple__underscores",
-				Unit: "",
+				Unit: "unit__multiple__underscores",
 				Type: MetricTypeGauge,
 			},
-			expected: "metric_with_multiple_underscores",
+			wantMetricName: "metric_with_multiple_underscores_unit_multiple_underscores",
+			wantUnitName:   "unit_multiple_underscores",
 		},
 		{
 			name: "metric with special chars in unit",
@@ -363,7 +372,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "unit@with#special/chars",
 				Type: MetricTypeGauge,
 			},
-			expected: "custom_metric_unit_with_special_per_chars",
+			wantMetricName: "custom_metric_unit_with_special_per_chars",
+			wantUnitName:   "unit_with_special_per_chars",
 		},
 		{
 			name: "metric name with only special characters",
@@ -376,7 +386,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeGauge,
 			},
-			expected: "",
+			wantMetricName: "",
 		},
 
 		// UTF8Allowed = true, WithMetricSuffixes = false tests
@@ -391,7 +401,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeGauge,
 			},
-			expected: "métric_with_ñ_chars",
+			wantMetricName: "métric_with_ñ_chars",
 		},
 		{
 			name: "utf8 metric with namespace without suffixes",
@@ -405,7 +415,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeGauge,
 			},
-			expected: "test_namespace_métric_with_ñ_chars",
+			wantMetricName: "test_namespace_métric_with_ñ_chars",
 		},
 
 		// UTF8Allowed = true, WithMetricSuffixes = true tests
@@ -420,7 +430,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeMonotonicCounter,
 			},
-			expected: "requêsts_total",
+			wantMetricName: "requêsts_total",
 		},
 		{
 			name: "utf8 gauge with unit 1 gets ratio suffix",
@@ -433,7 +443,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "1",
 				Type: MetricTypeGauge,
 			},
-			expected: "cpu_usagé_ratio",
+			wantMetricName: "cpu_usagé_ratio",
 		},
 		{
 			name: "utf8 metric with time unit",
@@ -446,7 +456,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "ms",
 				Type: MetricTypeGauge,
 			},
-			expected: "respønse_time_milliseconds",
+			wantMetricName: "respønse_time_milliseconds",
+			wantUnitName:   "milliseconds",
 		},
 		{
 			name: "utf8 metric with per unit",
@@ -459,7 +470,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "1/s",
 				Type: MetricTypeGauge,
 			},
-			expected: "requêsts_per_second",
+			wantMetricName: "requêsts_per_second",
+			wantUnitName:   "per_second",
 		},
 		{
 			name: "utf8 metric with namespace and suffixes",
@@ -473,7 +485,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "1/s",
 				Type: MetricTypeMonotonicCounter,
 			},
-			expected: "ñamespace_requêsts_per_second_total",
+			wantMetricName: "ñamespace_requêsts_per_second_total",
+			wantUnitName:   "per_second",
 		},
 		{
 			name: "metric name with only special characters",
@@ -486,7 +499,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeMonotonicCounter,
 			},
-			expected: "@#$%_total",
+			wantMetricName: "@#$%_total",
 		},
 		{
 			name: "namespace with special characters",
@@ -500,7 +513,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeMonotonicCounter,
 			},
-			expected: "test@namespace_metric_total",
+			wantMetricName: "test@namespace_metric_total",
 		},
 
 		// Edge cases and different metric types
@@ -515,7 +528,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "s",
 				Type: MetricTypeHistogram,
 			},
-			expected: "request_duration_seconds",
+			wantMetricName: "request_duration_seconds",
+			wantUnitName:   "seconds",
 		},
 		{
 			name: "exponential histogram metric type",
@@ -528,7 +542,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "By",
 				Type: MetricTypeExponentialHistogram,
 			},
-			expected: "request_size_bytes",
+			wantMetricName: "request_size_bytes",
+			wantUnitName:   "bytes",
 		},
 		{
 			name: "summary metric type",
@@ -541,7 +556,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "ms",
 				Type: MetricTypeSummary,
 			},
-			expected: "response_time_milliseconds",
+			wantMetricName: "response_time_milliseconds",
+			wantUnitName:   "milliseconds",
 		},
 		{
 			name: "non-monotonic counter metric type",
@@ -554,7 +570,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeNonMonotonicCounter,
 			},
-			expected: "active_connections",
+			wantMetricName: "active_connections",
 		},
 		{
 			name: "unknown metric type",
@@ -567,7 +583,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeUnknown,
 			},
-			expected: "unknown_metric",
+			wantMetricName: "unknown_metric",
 		},
 
 		// Additional unit mapping tests
@@ -582,7 +598,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "d",
 				Type: MetricTypeGauge,
 			},
-			expected: "uptime_days",
+			wantMetricName: "uptime_days",
+			wantUnitName:   "days",
 		},
 		{
 			name: "metric with hours unit",
@@ -595,7 +612,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "h",
 				Type: MetricTypeGauge,
 			},
-			expected: "duration_hours",
+			wantMetricName: "duration_hours",
+			wantUnitName:   "hours",
 		},
 		{
 			name: "metric with minutes unit",
@@ -608,7 +626,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "min",
 				Type: MetricTypeGauge,
 			},
-			expected: "timeout_minutes",
+			wantMetricName: "timeout_minutes",
+			wantUnitName:   "minutes",
 		},
 		{
 			name: "metric with microseconds unit",
@@ -621,7 +640,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "us",
 				Type: MetricTypeGauge,
 			},
-			expected: "latency_microseconds",
+			wantMetricName: "latency_microseconds",
+			wantUnitName:   "microseconds",
 		},
 		{
 			name: "metric with nanoseconds unit",
@@ -634,7 +654,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "ns",
 				Type: MetricTypeGauge,
 			},
-			expected: "precision_time_nanoseconds",
+			wantMetricName: "precision_time_nanoseconds",
+			wantUnitName:   "nanoseconds",
 		},
 		{
 			name: "metric with kibibytes unit",
@@ -647,7 +668,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "KiBy",
 				Type: MetricTypeGauge,
 			},
-			expected: "cache_size_kibibytes",
+			wantMetricName: "cache_size_kibibytes",
+			wantUnitName:   "kibibytes",
 		},
 		{
 			name: "metric with mebibytes unit",
@@ -660,7 +682,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "MiBy",
 				Type: MetricTypeGauge,
 			},
-			expected: "memory_mebibytes",
+			wantMetricName: "memory_mebibytes",
+			wantUnitName:   "mebibytes",
 		},
 		{
 			name: "metric with gibibytes unit",
@@ -673,7 +696,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "GiBy",
 				Type: MetricTypeGauge,
 			},
-			expected: "storage_gibibytes",
+			wantMetricName: "storage_gibibytes",
+			wantUnitName:   "gibibytes",
 		},
 		{
 			name: "metric with tibibytes unit",
@@ -686,7 +710,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "TiBy",
 				Type: MetricTypeGauge,
 			},
-			expected: "capacity_tibibytes",
+			wantMetricName: "capacity_tibibytes",
+			wantUnitName:   "tibibytes",
 		},
 		{
 			name: "metric with kilobytes unit",
@@ -699,7 +724,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "KBy",
 				Type: MetricTypeGauge,
 			},
-			expected: "transfer_kilobytes",
+			wantMetricName: "transfer_kilobytes",
+			wantUnitName:   "kilobytes",
 		},
 		{
 			name: "metric with megabytes unit",
@@ -712,7 +738,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "MBy",
 				Type: MetricTypeGauge,
 			},
-			expected: "download_megabytes",
+			wantMetricName: "download_megabytes",
+			wantUnitName:   "megabytes",
 		},
 		{
 			name: "metric with gigabytes unit",
@@ -725,7 +752,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "GBy",
 				Type: MetricTypeGauge,
 			},
-			expected: "backup_gigabytes",
+			wantMetricName: "backup_gigabytes",
+			wantUnitName:   "gigabytes",
 		},
 		{
 			name: "metric with terabytes unit",
@@ -738,7 +766,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "TBy",
 				Type: MetricTypeGauge,
 			},
-			expected: "archive_terabytes",
+			wantMetricName: "archive_terabytes",
+			wantUnitName:   "terabytes",
 		},
 		{
 			name: "metric with meters unit",
@@ -751,7 +780,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "m",
 				Type: MetricTypeGauge,
 			},
-			expected: "distance_meters",
+			wantMetricName: "distance_meters",
+			wantUnitName:   "meters",
 		},
 		{
 			name: "metric with volts unit",
@@ -764,7 +794,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "V",
 				Type: MetricTypeGauge,
 			},
-			expected: "voltage_volts",
+			wantMetricName: "voltage_volts",
+			wantUnitName:   "volts",
 		},
 		{
 			name: "metric with amperes unit",
@@ -777,7 +808,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "A",
 				Type: MetricTypeGauge,
 			},
-			expected: "current_amperes",
+			wantMetricName: "current_amperes",
+			wantUnitName:   "amperes",
 		},
 		{
 			name: "metric with joules unit",
@@ -790,7 +822,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "J",
 				Type: MetricTypeGauge,
 			},
-			expected: "energy_joules",
+			wantMetricName: "energy_joules",
+			wantUnitName:   "joules",
 		},
 		{
 			name: "metric with watts unit",
@@ -803,7 +836,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "W",
 				Type: MetricTypeGauge,
 			},
-			expected: "power_watts",
+			wantMetricName: "power_watts",
+			wantUnitName:   "watts",
 		},
 		{
 			name: "metric with grams unit",
@@ -816,7 +850,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "g",
 				Type: MetricTypeGauge,
 			},
-			expected: "weight_grams",
+			wantMetricName: "weight_grams",
+			wantUnitName:   "grams",
 		},
 		{
 			name: "metric with celsius unit",
@@ -829,7 +864,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "Cel",
 				Type: MetricTypeGauge,
 			},
-			expected: "temperature_celsius",
+			wantMetricName: "temperature_celsius",
+			wantUnitName:   "celsius",
 		},
 		{
 			name: "metric with hertz unit",
@@ -842,7 +878,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "Hz",
 				Type: MetricTypeGauge,
 			},
-			expected: "frequency_hertz",
+			wantMetricName: "frequency_hertz",
+			wantUnitName:   "hertz",
 		},
 		{
 			name: "metric with percent unit",
@@ -855,7 +892,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "%",
 				Type: MetricTypeGauge,
 			},
-			expected: "cpu_usage_percent",
+			wantMetricName: "cpu_usage_percent",
+			wantUnitName:   "percent",
 		},
 
 		// Per unit mapping tests
@@ -870,7 +908,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "1/m",
 				Type: MetricTypeGauge,
 			},
-			expected: "requests_per_minute",
+			wantMetricName: "requests_per_minute",
+			wantUnitName:   "per_minute",
 		},
 		{
 			name: "metric with per hour unit",
@@ -883,7 +922,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "1/h",
 				Type: MetricTypeGauge,
 			},
-			expected: "events_per_hour",
+			wantMetricName: "events_per_hour",
+			wantUnitName:   "per_hour",
 		},
 		{
 			name: "metric with per day unit",
@@ -896,7 +936,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "1/d",
 				Type: MetricTypeGauge,
 			},
-			expected: "transactions_per_day",
+			wantMetricName: "transactions_per_day",
+			wantUnitName:   "per_day",
 		},
 		{
 			name: "metric with per week unit",
@@ -909,7 +950,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "1/w",
 				Type: MetricTypeGauge,
 			},
-			expected: "reports_per_week",
+			wantMetricName: "reports_per_week",
+			wantUnitName:   "per_week",
 		},
 		{
 			name: "metric with per month unit",
@@ -922,7 +964,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "1/mo",
 				Type: MetricTypeGauge,
 			},
-			expected: "invoices_per_month",
+			wantMetricName: "invoices_per_month",
+			wantUnitName:   "per_month",
 		},
 		{
 			name: "metric with per year unit",
@@ -935,7 +978,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "1/y",
 				Type: MetricTypeGauge,
 			},
-			expected: "renewals_per_year",
+			wantMetricName: "renewals_per_year",
+			wantUnitName:   "per_year",
 		},
 		{
 			name: "metric with unknown per unit",
@@ -948,7 +992,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "1/custom_unit",
 				Type: MetricTypeGauge,
 			},
-			expected: "custom_per_custom_unit",
+			wantMetricName: "custom_per_custom_unit",
+			wantUnitName:   "per_custom_unit",
 		},
 
 		// Edge cases with empty and whitespace units
@@ -963,7 +1008,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "By/",
 				Type: MetricTypeGauge,
 			},
-			expected: "metric_bytes",
+			wantMetricName: "metric_bytes",
+			wantUnitName:   "bytes",
 		},
 		{
 			name: "metric with whitespace in unit",
@@ -976,7 +1022,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: " By / s ",
 				Type: MetricTypeGauge,
 			},
-			expected: "metric_bytes_per_second",
+			wantMetricName: "metric_bytes_per_second",
+			wantUnitName:   "bytes_per_second",
 		},
 		{
 			name: "metric with only slash in unit",
@@ -989,7 +1036,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "/",
 				Type: MetricTypeGauge,
 			},
-			expected: "metric",
+			wantMetricName: "metric",
 		},
 
 		// Common OTel metrics to showcase how the namer works
@@ -1004,7 +1051,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "ms",
 				Type: MetricTypeHistogram,
 			},
-			expected: "http_request_duration_milliseconds",
+			wantMetricName: "http_request_duration_milliseconds",
+			wantUnitName:   "milliseconds",
 		},
 		{
 			name: "http.request.duration/OTel-style",
@@ -1017,7 +1065,8 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "ms",
 				Type: MetricTypeHistogram,
 			},
-			expected: "http.request.duration",
+			wantMetricName: "http.request.duration",
+			wantUnitName:   "milliseconds",
 		},
 		{
 			name: "http.requests/Prometheus-style",
@@ -1030,7 +1079,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "1",
 				Type: MetricTypeMonotonicCounter,
 			},
-			expected: "http_requests_total",
+			wantMetricName: "http_requests_total",
 		},
 		{
 			name: "http.requests/OTel-style",
@@ -1043,14 +1092,34 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "1",
 				Type: MetricTypeMonotonicCounter,
 			},
-			expected: "http.requests",
+			wantMetricName: "http.requests",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.namer.Build(tt.metric)
-			require.Equal(t, tt.expected, got)
+			// Build metric name using MetricNamer
+			gotMetricName := tt.namer.Build(tt.metric)
+			if gotMetricName != tt.wantMetricName {
+				t.Errorf("MetricNamer.Build(%v) = %q, want %q", tt.metric, gotMetricName, tt.wantMetricName)
+			}
+
+			// Build unit name using UnitNamer to verify correlation when suffixes are enabled
+			if tt.namer.WithMetricSuffixes {
+				unitNamer := UnitNamer{
+					UTF8Allowed: tt.namer.UTF8Allowed,
+				}
+				gotUnitName := unitNamer.Build(tt.metric.Unit)
+				if gotUnitName != tt.wantUnitName {
+					t.Errorf("UnitNamer.Build(%q) = %q, want %q", tt.metric.Unit, gotUnitName, tt.wantUnitName)
+				}
+
+				// Verify correlation: if UnitNamer produces a non-empty unit name,
+				// it should be contained in the metric name when WithMetricSuffixes=true
+				if tt.namer.WithMetricSuffixes && !strings.Contains(gotMetricName, gotUnitName) {
+					t.Errorf("Metric name %q should contain unit name %q when WithMetricSuffixes=true", gotMetricName, gotUnitName)
+				}
+			}
 		})
 	}
 }
