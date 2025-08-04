@@ -31,6 +31,7 @@ func TestMetricNamer_Build(t *testing.T) {
 		metric         Metric
 		wantMetricName string
 		wantUnitName   string
+		wantError      string
 	}{
 		// UTF8Allowed = false, WithMetricSuffixes = false tests
 		{
@@ -47,11 +48,8 @@ func TestMetricNamer_Build(t *testing.T) {
 			wantMetricName: "simple_metric",
 		},
 		{
-			name: "metric with special characters replaced",
-			namer: MetricNamer{
-				UTF8Allowed:        false,
-				WithMetricSuffixes: false,
-			},
+			name:  "metric with special characters replaced",
+			namer: NewMetricNamer("", UnderscoreEscapingWithoutSuffixes),
 			metric: Metric{
 				Name: "metric@with#special$chars",
 				Unit: "",
@@ -98,6 +96,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Type: MetricTypeGauge,
 			},
 			wantMetricName: "",
+			wantError:      "normalization for metric \"\" resulted in empty name",
 		},
 		{
 			name: "metric with multiple consecutive special chars",
@@ -123,22 +122,30 @@ func TestMetricNamer_Build(t *testing.T) {
 				Unit: "",
 				Type: MetricTypeGauge,
 			},
-			wantMetricName: "",
+			wantError: "normalization for metric \"@#$%\" resulted in empty name",
 		},
 		{
-			name: "namespace with special characters",
+			name: "metric name with only special characters",
 			namer: MetricNamer{
-				Namespace:          "test@namespace",
 				UTF8Allowed:        false,
 				WithMetricSuffixes: false,
 			},
+			metric: Metric{
+				Name: "@_#_$_%",
+				Unit: "",
+				Type: MetricTypeGauge,
+			},
+			wantError: "normalization for metric \"@_#_$_%\" resulted in invalid name \"_____\"",
+		},
+		{
+			name:  "namespace with special characters",
+			namer: NewMetricNamer("test@namespace!!??", UnderscoreEscapingWithoutSuffixes),
 			metric: Metric{
 				Name: "metric",
 				Unit: "",
 				Type: MetricTypeGauge,
 			},
-			wantMetricName: "test@namespace_metric", // TODO: should be "test_namespace_metric"
-
+			wantMetricName: "test_namespace_metric",
 		},
 
 		// UTF8Allowed = false, WithMetricSuffixes = true tests
@@ -210,11 +217,8 @@ func TestMetricNamer_Build(t *testing.T) {
 			wantUnitName:   "bytes",
 		},
 		{
-			name: "metric with per unit",
-			namer: MetricNamer{
-				UTF8Allowed:        false,
-				WithMetricSuffixes: true,
-			},
+			name:  "metric with per unit",
+			namer: NewMetricNamer("", UnderscoreEscapingWithSuffixes),
 			metric: Metric{
 				Name: "requests",
 				Unit: "1/s",
@@ -319,6 +323,74 @@ func TestMetricNamer_Build(t *testing.T) {
 			wantUnitName:   "seconds",
 		},
 		{
+			name: "metric name already contains total suffix with UTF8Allowed",
+			namer: MetricNamer{
+				UTF8Allowed:        true,
+				WithMetricSuffixes: true,
+			},
+			metric: Metric{
+				Name: "requests_total",
+				Unit: "",
+				Type: MetricTypeMonotonicCounter,
+			},
+			wantMetricName: "requests_total",
+		},
+		{
+			name: "metric name already contains ratio suffix with UTF8Allowed",
+			namer: MetricNamer{
+				UTF8Allowed:        true,
+				WithMetricSuffixes: true,
+			},
+			metric: Metric{
+				Name: "cpu_usage_ratio",
+				Unit: "1",
+				Type: MetricTypeGauge,
+			},
+			wantMetricName: "cpu_usage_ratio",
+		},
+		{
+			name: "metric name already contains unit suffix with UTF8Allowed",
+			namer: MetricNamer{
+				UTF8Allowed:        true,
+				WithMetricSuffixes: true,
+			},
+			metric: Metric{
+				Name: "response_time_seconds",
+				Unit: "s",
+				Type: MetricTypeGauge,
+			},
+			wantMetricName: "response_time_seconds",
+			wantUnitName:   "seconds",
+		},
+		{
+			name: "metric name already contains type and unit suffix with UTF8Allowed",
+			namer: MetricNamer{
+				UTF8Allowed:        true,
+				WithMetricSuffixes: true,
+			},
+			metric: Metric{
+				Name: "cpu_seconds_total",
+				Unit: "s",
+				Type: MetricTypeMonotonicCounter,
+			},
+			wantMetricName: "cpu_seconds_total",
+			wantUnitName:   "seconds",
+		},
+		{
+			name: "reproduction case for opentelemetry-collector metrics",
+			namer: MetricNamer{
+				UTF8Allowed:        true,
+				WithMetricSuffixes: true,
+			},
+			metric: Metric{
+				Name: "otelcol_process_cpu_seconds",
+				Unit: "s",
+				Type: MetricTypeMonotonicCounter,
+			},
+			wantMetricName: "otelcol_process_cpu_seconds_total",
+			wantUnitName:   "seconds",
+		},
+		{
 			name: "metric with namespace and suffixes",
 			namer: MetricNamer{
 				Namespace:          "app",
@@ -346,6 +418,32 @@ func TestMetricNamer_Build(t *testing.T) {
 				Type: MetricTypeMonotonicCounter,
 			},
 			wantMetricName: "app_123_requests_total",
+		},
+		{
+			name: "metric with only underscores (escaped)",
+			namer: MetricNamer{
+				UTF8Allowed:        false,
+				WithMetricSuffixes: false,
+			},
+			metric: Metric{
+				Name: "___",
+				Unit: "",
+				Type: MetricTypeGauge,
+			},
+			wantMetricName: "___",
+		},
+		{
+			name: "metric with only underscores (utf8)",
+			namer: MetricNamer{
+				UTF8Allowed:        true,
+				WithMetricSuffixes: false,
+			},
+			metric: Metric{
+				Name: "___",
+				Unit: "",
+				Type: MetricTypeGauge,
+			},
+			wantMetricName: "___",
 		},
 		{
 			name: "metric with multiple underscores normalized",
@@ -387,6 +485,7 @@ func TestMetricNamer_Build(t *testing.T) {
 				Type: MetricTypeGauge,
 			},
 			wantMetricName: "",
+			wantError:      "normalization for metric \"@#$%\" resulted in empty name",
 		},
 
 		// UTF8Allowed = true, WithMetricSuffixes = false tests
@@ -404,12 +503,8 @@ func TestMetricNamer_Build(t *testing.T) {
 			wantMetricName: "métric_with_ñ_chars",
 		},
 		{
-			name: "utf8 metric with namespace without suffixes",
-			namer: MetricNamer{
-				Namespace:          "test_namespace",
-				UTF8Allowed:        true,
-				WithMetricSuffixes: false,
-			},
+			name:  "utf8 metric with namespace without suffixes",
+			namer: NewMetricNamer("test_namespace", NoTranslation),
 			metric: Metric{
 				Name: "métric_with_ñ_chars",
 				Unit: "",
@@ -474,12 +569,8 @@ func TestMetricNamer_Build(t *testing.T) {
 			wantUnitName:   "per_second",
 		},
 		{
-			name: "utf8 metric with namespace and suffixes",
-			namer: MetricNamer{
-				Namespace:          "ñamespace",
-				UTF8Allowed:        true,
-				WithMetricSuffixes: true,
-			},
+			name:  "utf8 metric with namespace and suffixes",
+			namer: NewMetricNamer("ñamespace", NoUTF8EscapingWithSuffixes),
 			metric: Metric{
 				Name: "requêsts",
 				Unit: "1/s",
@@ -1099,7 +1190,16 @@ func TestMetricNamer_Build(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Build metric name using MetricNamer
-			gotMetricName := tt.namer.Build(tt.metric)
+			gotMetricName, err := tt.namer.Build(tt.metric)
+			if tt.wantError != "" {
+				if err == nil {
+					t.Errorf("MetricNamer.Build(%v), got nil err, want %q", tt.metric, tt.wantError)
+				} else if err.Error() != tt.wantError {
+					t.Errorf("MetricNamer.Build(%v), got err string = %q want %q", tt.metric, err, tt.wantError)
+				}
+			} else if err != nil {
+				t.Errorf("MetricNamer.Build(%v), got err string = %q want nil", tt.metric, err)
+			}
 			if gotMetricName != tt.wantMetricName {
 				t.Errorf("MetricNamer.Build(%v) = %q, want %q", tt.metric, gotMetricName, tt.wantMetricName)
 			}
