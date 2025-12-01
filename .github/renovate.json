@@ -1,0 +1,51 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    "schedule:weekly"
+  ],
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
+  "branchPrefix": "grafanarenovatebot/",
+  "platformCommit": "enabled",
+  "dependencyDashboard": false,
+  "rebaseWhen": "behind-base-branch",
+  "packageRules": [
+    {
+      "description": "Group all go dependencies together to reduce noise",
+      "matchDatasources": [
+        "go"
+      ],
+      "groupName": "go",
+      "enabled": true
+    },
+    {
+      "description": "Label patch updates",
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "labels": [
+        "automerge-patch"
+      ]
+    },
+    {
+      "description": "Label minor updates",
+      "matchUpdateTypes": [
+        "minor"
+      ],
+      "labels": [
+        "automerge-minor"
+      ]
+    }
+  ],
+  "separateMajorMinor": false,
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": [
+      "automerge-security-update"
+    ]
+  },
+  "osvVulnerabilityAlerts": true
+}
