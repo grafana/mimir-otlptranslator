@@ -12,7 +12,7 @@ jobs:
     name: Go tests
     runs-on: ubuntu-latest
     container:
-      image: golang:1.24.1-alpine
+      image: golang:1.25.4-alpine@sha256:d3f0cf7723f3429e3f9ed846243970b20a2de7bae6a5b66fc5914e228d831bbb
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - run: go test ./...
