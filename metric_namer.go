@@ -179,7 +179,7 @@ func (mn *MetricNamer) buildCompliantMetricName(name, unit string, metricType Me
 	// Full normalization following standard Prometheus naming conventions
 	if mn.WithMetricSuffixes {
 		normalizedName = normalizeName(name, unit, metricType, mn.Namespace)
-		return
+		return normalizedName, err
 	}
 
 	// Simple case (no full normalization, no units, etc.).
@@ -193,7 +193,7 @@ func (mn *MetricNamer) buildCompliantMetricName(name, unit string, metricType Me
 			return !isValidCompliantMetricChar(r) && r != '_'
 		}), "_")
 		normalizedName = namespace + "_" + metricName
-		return
+		return normalizedName, err
 	}
 
 	// Metric name starts with a digit? Prefix it with an underscore.
@@ -202,7 +202,7 @@ func (mn *MetricNamer) buildCompliantMetricName(name, unit string, metricType Me
 	}
 
 	normalizedName = metricName
-	return
+	return normalizedName, err
 }
 
 // isValidCompliantMetricChar checks if a rune is a valid metric name character (a-z, A-Z, 0-9, :).
@@ -348,7 +348,7 @@ func (mn *MetricNamer) buildMetricName(inputName, unit string, metricType Metric
 			name = name + "_" + mainUnitSuffix
 		}
 	}
-	return
+	return name, err
 }
 
 // trimSuffixAndDelimiter trims a suffix, plus one extra character which is
