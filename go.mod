@@ -1,5 +1,3 @@
 module github.com/prometheus/otlptranslator
 
-go 1.23.0
-
-toolchain go1.26.5
+go 1.26.6
